@@ -44,6 +44,8 @@ It reports:
 - what `_pkgdown.yml` uses
 - vignette engines and pkgdown-only `vignettes/articles/`
 - the state of README/badges
+- whether `man/` covers every export in `NAMESPACE`
+- system libraries the dependencies need
 - any `docs/` output folder
 - pkgdown workflows
 - `.Rbuildignore` entries to change
@@ -77,9 +79,24 @@ These are the usual ones:
 
 ### 3. Add the site workflow and remove pkgdown
 
-- Copy `assets/github-pages.yml` to `.github/workflows/github-pages.yml`. It builds on
-  push to the default branch, uploads a preview artifact on PRs, and deploys to the
-  `gh-pages` branch. Adjust the branch name if the default isn't `main`.
+- **Regenerate and commit `man/` first.** pkgdown CI usually ran `devtools::document()`, but
+  the litedown action never runs roxygen, so `manual.html` is built from whatever `man/`
+  is committed. Run `roxygen2::roxygenise()` and commit the result; the audit flags
+  exports that have no Rd page. (Don't hand-edit `NAMESPACE`/`man/`.)
+- If `_pkgdown.yml` has a `reference:` index and the user wants it kept, generate the
+  grouped manual **now, before deleting the config** (step 4).
+- Copy `assets/github-pages.yml` to `.github/workflows/github-pages.yml` (create the
+  folder first: `mkdir -p .github/workflows`, since removing the last workflow deletes an
+  empty directory). It builds on push to the default branch, uploads a preview artifact on
+  PRs, and deploys to the `gh-pages` branch. Adjust the branch name if the default isn't
+  `main`.
+- **System libraries.** `yihui/actions/setup-r-dependencies` installs with base R, not pak,
+  so it does not resolve system requirements the way r-lib's action did. Without them the
+  first build dies installing the package itself (for example `pdftools` fails to load
+  `libpoppler-cpp.so.0`). Copy the audit's suggested `apt-packages:` line into the
+  workflow, and add `system-packages: pandoc` when any vignette uses the knitr/rmarkdown
+  engine. Packages that need Java (`rJava`, `tabulapdf`) are only tolerated if they're in
+  Suggests; check the first build log.
 - Delete the pkgdown workflow (usually `.github/workflows/pkgdown.yaml`).
 - If any vignette uses Quarto (`VignetteBuilder: quarto`), add
   `- uses: quarto-dev/quarto-actions/setup@v2` before the `setup-r-dependencies` step,
@@ -94,7 +111,7 @@ These are the usual ones:
 - Update `.Rbuildignore`:
   - remove `^_pkgdown\.yml$`, `^docs$`, `^pkgdown$` (unless `docs/` is kept for a book)
   - add `^site$`, and also `^examples$` and `^playground$` if you create those folders
-  - keep `^\.github$`
+  - add or keep `^\.github$` (the audit flags it when missing)
 
   These new folders are site sources, not package contents.
 - Make sure `README.md` is committed and current. The action reads the `.md` file and
@@ -116,7 +133,17 @@ file with the same name; everything else still comes from the template. Common o
 - `site/<page>.Rmd`: an extra top-level page, which gets its own nav entry. Useful for
   migrated pkgdown-only articles.
 - `site/manual.Rmd` / `site/index.Rmd`: overrides, only when the defaults really don't
-  work.
+  work. To keep pkgdown's grouped reference, generate `site/manual.Rmd` rather than writing
+  it by hand:
+
+  ```bash
+  python3 <skill-dir>/scripts/make_grouped_manual.py /path/to/pkg
+  ```
+
+  It turns the `reference:` sections into a link index above `pkg_manual()`, maps alias-only
+  topics to their Rd `\name`, expands `starts_with()`-style selectors, and warns about topics
+  with no Rd page or Rd pages the config never listed. Run it while `_pkgdown.yml` still
+  exists.
 
 For extra pages, use litedown syntax, not rmarkdown. The main differences:
 - There's no Pandoc: use `::: {.class}` fenced divs, and `@fig:label` / `@tab:label`
@@ -176,7 +203,10 @@ check that the package installs in webR.
 
 ### 8. Verify
 
-If R is available locally, do a trial build that mimics the action:
+If R is available locally *and can reach CRAN*, do a trial build that mimics the action.
+Sandboxes often block CRAN, so litedown can't be installed; in that case the PR's
+`site-preview` artifact is your first real build, so open the PR early (with the user's OK)
+and read the workflow log for failures:
 
 ```bash
 R CMD build . && R CMD INSTALL <pkg>_*.tar.gz
@@ -192,7 +222,8 @@ workflow uploads. Check each of these:
 - the manual page (examples render)
 - the articles page (every vignette listed)
 - the news page
-- redirect stubs
+- redirect stubs (open one and confirm it lands on the right `manual.html#sec:man-<name>`)
+- the workflow log for a failed package install (usually a missing system library)
 - the playground loads, and the default example runs
 
 ## What to hand back

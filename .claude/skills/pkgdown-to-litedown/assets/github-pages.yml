@@ -27,6 +27,11 @@ jobs:
         with:
           extra-packages: litedown xfun .
           r-universe: yihui
+          # This action installs with base R, not pak, so it does NOT resolve system
+          # libraries. Fill these from the audit's "System libraries" section, e.g.
+          #   apt-packages: libpoppler-cpp-dev libmagick++-dev
+          # rmarkdown/knitr vignettes need pandoc (not preinstalled on ubuntu-latest):
+          # system-packages: pandoc
       - uses: yihui/actions/litedown-site@HEAD
         with:
           site-dir: 'site'

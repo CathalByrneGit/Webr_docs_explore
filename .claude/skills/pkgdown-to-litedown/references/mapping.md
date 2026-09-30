@@ -79,7 +79,7 @@ manual page" below.
 | code copy buttons, heading anchors, TOC highlighting | Included by default (`@copy-button`, `@heading-anchor`, `@toc-highlight`). |
 | math (MathJax / KaTeX) | litedown detects `$…$` math and loads KaTeX by default (configurable through the `js_math` option). |
 | `.Rbuildignore`: `^_pkgdown\.yml$ ^docs$ ^pkgdown$` | Replace them with `^site$ ^examples$ ^playground$`, including only the folders that exist. |
-| `r-lib/actions/examples/pkgdown.yaml` workflow | `assets/github-pages.yml`. |
+| `r-lib/actions/examples/pkgdown.yaml` workflow | `assets/github-pages.yml`. It has no `devtools::document()` step and does not install system libraries; commit `man/` and set `apt-packages:` / `system-packages:` yourself. |
 
 ## `_litedown.yml` template
 
@@ -115,7 +115,8 @@ output:
 ## Custom grouped manual page
 
 `pkg_manual()` has no grouping option. For grouping, write `site/manual.Rmd` so that it
-renders Rd files per section. Keep it simple: a hand-written index of links to the default
+renders Rd files per section. `scripts/make_grouped_manual.py` generates exactly this file
+from `_pkgdown.yml` (run it before deleting the config); the layout below is what it emits. Keep it simple: a hand-written index of links to the default
 anchors is usually enough, and it's robust:
 
 ````markdown
